@@ -30,7 +30,7 @@ def run_daily_scan():
     try:
         print("CSV file read kar rahe hain...")
         # 1. Apna exact CSV filename yahan rakhein
-        df = pd.read_csv("BVVBBVBV (7)_2.csv")
+        df = pd.read_csv("BVVBBVBV (7).csv")
         df["Symbol"] = df["Symbol"].astype(str).str.strip().str.upper()
         symbols = df["Symbol"].tolist()
         
