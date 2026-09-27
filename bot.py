@@ -25,6 +25,14 @@ def send_telegram_alert(message):
     except Exception as e:
         print(f"Telegram message bhejne mein error: {e}")
 
+def get_stock_sector(yf_sym):
+    """Yahoo Finance se stock ka sector nikalne ka function."""
+    try:
+        info = yf.Ticker(yf_sym).info
+        return info.get('sector', 'Unknown Sector')
+    except:
+        return 'Unknown Sector'
+
 def run_daily_scan():
     """Daily market data scan karke breakout/breakdown check karna."""
     try:
@@ -56,7 +64,6 @@ def run_daily_scan():
         rolling_rs = daily_returns.rolling(window=250).sum()
         
         # 5. Har din ki cross-sectional ranking (Top 35% vs Bottom 35%)
-        # ascending=False ka matlab hai sabse highest momentum ko rank 1 (0.0 percentile) milega
         daily_ranks = rolling_rs.rank(axis=1, pct=True, ascending=False)
         
         alerts = []
@@ -92,33 +99,29 @@ def run_daily_scan():
             # LOGIC 1: BREAKOUT (Pichla zone Red tha, aur aaj Green hua)
             # =========================================================
             if curr_zone == 'G' and prev_zone != 'G':
-                # Aaj pehla din hai jab yeh wapas Green mein enter hua hai.
-                # Ab reverse mein check karo ki last solid zone kaunsa tha (Grey skip karke)
                 last_main_zone = None
                 for past_z in reversed(zones[:-1]):
                     if past_z in ['G', 'R']:
                         last_main_zone = past_z
                         break
                         
-                # Agar pichla main zone Red tha, toh ye Confirm Breakout hai!
                 if last_main_zone == 'R':
-                    alerts.append(f"🚀 *Red-to-Green Breakout:* *{sym}* (₹{current_price:.2f})")
+                    sector = get_stock_sector(yf_sym)
+                    alerts.append(f"🚀 *Red-to-Green Breakout:* *{sym}* | 🏢 {sector} | (₹{current_price:.2f})")
                     
             # =========================================================
             # LOGIC 2: BREAKDOWN (Pichla zone Green tha, aur aaj Red hua)
             # =========================================================
             elif curr_zone == 'R' and prev_zone != 'R':
-                # Aaj pehla din hai jab yeh wapas Red mein gira hai.
-                # Ab reverse mein check karo ki last solid zone kaunsa tha (Grey skip karke)
                 last_main_zone = None
                 for past_z in reversed(zones[:-1]):
                     if past_z in ['G', 'R']:
                         last_main_zone = past_z
                         break
                         
-                # Agar pichla main zone Green tha, toh ye Confirm Breakdown hai!
                 if last_main_zone == 'G':
-                    alerts.append(f"🔻 *Green-to-Red Breakdown:* *{sym}* (₹{current_price:.2f})")
+                    sector = get_stock_sector(yf_sym)
+                    alerts.append(f"🔻 *Green-to-Red Breakdown:* *{sym}* | 🏢 {sector} | (₹{current_price:.2f})")
 
         # 7. Final Alerts Telegram par bhejna
         if alerts:
