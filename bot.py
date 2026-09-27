@@ -29,16 +29,15 @@ def run_daily_scan():
     """Daily market data scan karke breakout/breakdown check karna."""
     try:
         print("CSV file read kar rahe hain...")
-        # 1. Apna exact CSV filename yahan rakhein
+        # 1. Aapki CSV file load karna
         df = pd.read_csv("BVVBBVBV (7).csv")
         df["Symbol"] = df["Symbol"].astype(str).str.strip().str.upper()
         
-        # 2. CSV se Sector ko Symbol ke sath map karna (Dictionary banana)
-        # Note: Agar aapki CSV mein column ka naam kuch aur hai (e.g. 'Industry', 'Sectors'), toh 'Sector' ko usse replace karein
+        # 2. CSV se 'sector' ko Symbol ke sath map karna
         if 'sector' in df.columns:
-            symbol_to_sector = dict(zip(df['Symbol'], df['Sector']))
+            symbol_to_sector = dict(zip(df['Symbol'], df['sector']))
         else:
-            print("Warning: CSV file mein 'Sector' naam ka column nahi mila!")
+            print("Warning: CSV file mein 'sector' naam ka column nahi mila!")
             symbol_to_sector = {}
 
         symbols = df["Symbol"].tolist()
@@ -47,7 +46,7 @@ def run_daily_scan():
         yf_symbols = [f"{sym}.NS" for sym in symbols]
         
         print(f"{len(yf_symbols)} stocks ka 3 saal ka data download ho raha hai...")
-        # 3. 3 saal (3y) ka data taaki long term trend aur transitions identify ho sakein
+        # 3. 3 saal ka data taaki long term trend aur transitions identify ho sakein
         hist = yf.download(yf_symbols, period="3y", interval="1d", progress=False)
         
         if "Close" in hist:
@@ -61,7 +60,7 @@ def run_daily_scan():
         # 4. Daily returns calculate karna
         daily_returns = closes.pct_change() * 100
         
-        # 5. 250-Day Rolling Momentum (Pichle 250 dino ka sum)
+        # 5. 250-Day Rolling Momentum
         rolling_rs = daily_returns.rolling(window=250).sum()
         
         # 6. Har din ki cross-sectional ranking (Top 35% vs Bottom 35%)
@@ -84,20 +83,21 @@ def run_daily_scan():
             zones = []
             for rank in stock_ranks:
                 if rank <= 0.35:
-                    zones.append('G')  # Top 35% (Green)
+                    zones.append('G')  # Top 35%
                 elif rank >= 0.65:
-                    zones.append('R')  # Bottom 35% (Red)
+                    zones.append('R')  # Bottom 35%
                 else:
-                    zones.append('Y')  # Middle 30% (Grey)
+                    zones.append('Y')  # Middle 30%
                     
             curr_zone = zones[-1]   # Aaj ka zone
             prev_zone = zones[-2]   # 1 din pehle ka zone
             
-            # Stock ka current price (Alert message mein dikhane ke liye)
+            # Stock ka current price
             current_price = closes[yf_sym].dropna().iloc[-1]
             
-            # CSV dictionary se sector nikalna
-            sector = symbol_to_sector.get(sym, 'Unknown Sector')
+            # CSV dictionary se sector nikalna aur format karna (e.g., 'i.t' -> 'I.T')
+            raw_sector = str(symbol_to_sector.get(sym, 'Unknown Sector'))
+            sector_name = raw_sector.upper() if len(raw_sector) <= 3 else raw_sector.title()
             
             # =========================================================
             # LOGIC 1: BREAKOUT (Pichla zone Red tha, aur aaj Green hua)
@@ -110,7 +110,7 @@ def run_daily_scan():
                         break
                         
                 if last_main_zone == 'R':
-                    alerts.append(f"🚀 *Red-to-Green Breakout:* *{sym}* | 🏢 {sector} | (₹{current_price:.2f})")
+                    alerts.append(f"🚀 *Red-to-Green Breakout:* *{sym}* | 🏢 {sector_name} | (₹{current_price:.2f})")
                     
             # =========================================================
             # LOGIC 2: BREAKDOWN (Pichla zone Green tha, aur aaj Red hua)
@@ -123,7 +123,7 @@ def run_daily_scan():
                         break
                         
                 if last_main_zone == 'G':
-                    alerts.append(f"🔻 *Green-to-Red Breakdown:* *{sym}* | 🏢 {sector} | (₹{current_price:.2f})")
+                    alerts.append(f"🔻 *Green-to-Red Breakdown:* *{sym}* | 🏢 {sector_name} | (₹{current_price:.2f})")
 
         # 8. Final Alerts Telegram par bhejna
         if alerts:
