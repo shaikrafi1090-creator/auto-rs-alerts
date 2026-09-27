@@ -25,14 +25,6 @@ def send_telegram_alert(message):
     except Exception as e:
         print(f"Telegram message bhejne mein error: {e}")
 
-def get_stock_sector(yf_sym):
-    """Yahoo Finance se stock ka sector nikalne ka function."""
-    try:
-        info = yf.Ticker(yf_sym).info
-        return info.get('sector', 'Unknown Sector')
-    except:
-        return 'Unknown Sector'
-
 def run_daily_scan():
     """Daily market data scan karke breakout/breakdown check karna."""
     try:
@@ -40,13 +32,22 @@ def run_daily_scan():
         # 1. Apna exact CSV filename yahan rakhein
         df = pd.read_csv("BVVBBVBV (7).csv")
         df["Symbol"] = df["Symbol"].astype(str).str.strip().str.upper()
+        
+        # 2. CSV se Sector ko Symbol ke sath map karna (Dictionary banana)
+        # Note: Agar aapki CSV mein column ka naam kuch aur hai (e.g. 'Industry', 'Sectors'), toh 'Sector' ko usse replace karein
+        if 'sector' in df.columns:
+            symbol_to_sector = dict(zip(df['Symbol'], df['Sector']))
+        else:
+            print("Warning: CSV file mein 'Sector' naam ka column nahi mila!")
+            symbol_to_sector = {}
+
         symbols = df["Symbol"].tolist()
         
         # Yahoo finance ke liye .NS lagana
         yf_symbols = [f"{sym}.NS" for sym in symbols]
         
         print(f"{len(yf_symbols)} stocks ka 3 saal ka data download ho raha hai...")
-        # 2. 3 saal (3y) ka data taaki long term trend aur transitions identify ho sakein
+        # 3. 3 saal (3y) ka data taaki long term trend aur transitions identify ho sakein
         hist = yf.download(yf_symbols, period="3y", interval="1d", progress=False)
         
         if "Close" in hist:
@@ -57,19 +58,19 @@ def run_daily_scan():
         closes = closes.ffill().bfill()
         
         print("Daily Returns aur 250-Day Momentum calculate ho raha hai...")
-        # 3. Daily returns calculate karna
+        # 4. Daily returns calculate karna
         daily_returns = closes.pct_change() * 100
         
-        # 4. 250-Day Rolling Momentum (Pichle 250 dino ka sum)
+        # 5. 250-Day Rolling Momentum (Pichle 250 dino ka sum)
         rolling_rs = daily_returns.rolling(window=250).sum()
         
-        # 5. Har din ki cross-sectional ranking (Top 35% vs Bottom 35%)
+        # 6. Har din ki cross-sectional ranking (Top 35% vs Bottom 35%)
         daily_ranks = rolling_rs.rank(axis=1, pct=True, ascending=False)
         
         alerts = []
         
         print("Har stock ki life cycle check ho rahi hai...")
-        # 6. Har stock ki past history (Zones) check karna
+        # 7. Har stock ki past history (Zones) check karna
         for sym, yf_sym in zip(symbols, yf_symbols):
             if yf_sym not in daily_ranks.columns:
                 continue
@@ -95,6 +96,9 @@ def run_daily_scan():
             # Stock ka current price (Alert message mein dikhane ke liye)
             current_price = closes[yf_sym].dropna().iloc[-1]
             
+            # CSV dictionary se sector nikalna
+            sector = symbol_to_sector.get(sym, 'Unknown Sector')
+            
             # =========================================================
             # LOGIC 1: BREAKOUT (Pichla zone Red tha, aur aaj Green hua)
             # =========================================================
@@ -106,7 +110,6 @@ def run_daily_scan():
                         break
                         
                 if last_main_zone == 'R':
-                    sector = get_stock_sector(yf_sym)
                     alerts.append(f"🚀 *Red-to-Green Breakout:* *{sym}* | 🏢 {sector} | (₹{current_price:.2f})")
                     
             # =========================================================
@@ -120,10 +123,9 @@ def run_daily_scan():
                         break
                         
                 if last_main_zone == 'G':
-                    sector = get_stock_sector(yf_sym)
                     alerts.append(f"🔻 *Green-to-Red Breakdown:* *{sym}* | 🏢 {sector} | (₹{current_price:.2f})")
 
-        # 7. Final Alerts Telegram par bhejna
+        # 8. Final Alerts Telegram par bhejna
         if alerts:
             msg = "📊 *True Cycle Zone Alerts*\n\n" + "\n".join(alerts)
             print("Alerts mil gaye! Telegram par bhej rahe hain...")
